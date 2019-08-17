@@ -129,6 +129,15 @@ errors and tide-project-errors buffer."
   :type 'boolean
   :group 'tide)
 
+(defcustom tide-completion-fuzzy nil
+  "Allow fuzzy completion.
+
+By default only candidates with exact prefix match are shown. If
+set to non-nil, candidates with match anywhere inside the name
+are shown."
+  :type 'boolean
+  :group 'tide)
+
 (defcustom tide-completion-detailed nil
   "Completion dropdown will contain detailed method information if set to non-nil."
   :type 'boolean
@@ -1421,6 +1430,16 @@ This function is used for the basic completions sorting."
     (and (> (point) (point-min))
          (equal (string (char-before (point))) "."))))
 
+(defun tide-completion-filter-candidates (completions prefix)
+  (-filter (lambda (completion)
+             (and
+              (if tide-completion-fuzzy
+                  (string-match-p (regexp-quote prefix) (plist-get completion :name))
+                (string-prefix-p prefix (plist-get completion :name) tide-completion-ignore-case))
+              (or (not tide-filter-out-warning-completions)
+                  (not (equal (plist-get completion :kind) "warning")))))
+           completions))
+
 (defun tide-annotate-completions (completions prefix file-location)
   (-map
    (lambda (completion)
@@ -1429,12 +1448,7 @@ This function is used for the basic completions sorting."
        (put-text-property 0 1 'completion completion name)
        (put-text-property 0 1 'prefix prefix name)
        name))
-   (let ((filtered
-          (-filter (lambda (completion)
-                     (and (string-prefix-p prefix (plist-get completion :name) tide-completion-ignore-case)
-                          (or (not tide-filter-out-warning-completions)
-                              (not (equal (plist-get completion :kind) "warning")))))
-                   completions)))
+   (let ((filtered (tide-completion-filter-candidates completions prefix)))
      (let ((completions-comparator
             (if tide-sort-completions-by-kind
                 (tide-compose-comparators 'tide-compare-completions-basic
@@ -1493,7 +1507,8 @@ This function is used for the basic completions sorting."
         (backward-delete-char (length name))
         (-if-let (span (plist-get completion :replacementSpan))
             (progn
-              (insert prefix) ;; tsserver assumes the prefix text is already inserted
+              (when (string-prefix-p prefix (plist-get completion :name) tide-completion-ignore-case)
+                (insert prefix))  ;; tsserver assumes the prefix text is already inserted for non-fuzzy completion.
               (tide-apply-edit (tide-combine-plists span `(:newText ,insert-text))))
           (insert insert-text))))
 
