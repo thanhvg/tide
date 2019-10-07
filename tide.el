@@ -1533,8 +1533,16 @@ This function is used for the basic completions sorting."
                       (lambda (cb)
                         (tide-command:completions arg cb))))
     (sorted t)
+    (no-cache tide-completion-fuzzy)
     (ignore-case tide-completion-ignore-case)
     (meta (tide-completion-meta arg))
+    (match
+     (let* ((completion (get-text-property 0 'completion arg))
+            (prefix (get-text-property 0 'prefix arg))
+            (start (if tide-completion-fuzzy
+                       (string-match-p (regexp-quote prefix) (plist-get completion :name))
+                     0)))
+       `((,start . ,(+ start (length prefix))))))
     (annotation (tide-completion-annotation arg))
     (doc-buffer (tide-completion-doc-buffer arg))
     (post-completion (tide-post-completion arg))))
